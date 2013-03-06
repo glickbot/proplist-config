@@ -2,7 +2,7 @@
 
 -compile(export_all).
 
--export([append_until/3, append_until/4, appconfig/0]).
+-export([appconfig/0]).
 -export([get_strings/1, get_strings_until/2]).
 -export([get_strings_until/3, get_strings_until/4, mod/3, mod/5]).
 
