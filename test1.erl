@@ -6,7 +6,7 @@
 -export([get_strings/1, get_strings_until/2]).
 -export([get_strings_until/3, get_strings_until/4, mod/3, mod/5]).
 
-modify(Name, Value) ->
+modify_v1(Name, Value) ->
 	Loc = name_to_loc(Name),
 	ExLoc = expand_loc(Loc),
 	%% check to make sure value exists
@@ -17,11 +17,57 @@ modify(Name, Value) ->
 	Output = reassemble(NewStrings),
 	file:write_file("var/app.config.new", Output).
 
+change(Name, Value) ->
+	change(Name, Value, appconfig()).
+
+change(Name, Value, File) ->
+	Target = expand_loc(name_to_loc(Name)),
+	ValStrings = val_to_strings(Value),
+	Action = { change, ValStrings },
+	modify(Target, Action, File).
+
+add(Name, Value) ->
+	add(Name, Value, appconfig()).
+
+add(Name, Value, File) ->
+	Loc = name_to_loc(Name),
+	{ NewLoc, New } = lists:split(length(Loc) - 1, Loc),
+	Target = expand_loc(NewLoc),
+	ValStrings = val_to_strings(Value),
+	Action = { add, New, ValStrings },
+	modify(Target, Action, File).
+
+del(Name) ->
+	del(Name, appconfig()).
+
+del(Name, File) ->
+	Loc = name_to_loc(Name),
+	{ NewLoc, Del } = lists:split(length(Loc) - 1, Loc),
+	Target = expand_loc(NewLoc),
+	Action = { del, Del },
+	modify(Target, Action, File).
+
+comment() -> true.
+uncomment() ->false.
+
+modify(Target, Action, File) ->
+	Data = get_strings(File),
+	NewData = mod(Target, Action, Data),
+	Output = reassemble(NewData),
+	file:write_file(File++".new", Output).
+
+
+
+% { add, Name, Value }
+% { mod, Value }
+% { del, Name }
+
 get_strings_until(Match, Data) ->
 	get_strings_until(Match, Data, []).
 
 get_strings_until(Match, Data, Acc) ->
 	get_strings_until(Match, [], Data, Acc).
+
 
 get_strings_until(Match, [], [ {_, _, Match} = H | Data ], Acc ) ->
 	{ok, H, Data, Acc};
@@ -29,11 +75,14 @@ get_strings_until(Match, [], [ {Match, _, _} = H | Data ], Acc ) ->
 	{ok, H, Data, Acc};
 get_strings_until(Match, [], [ {Match, _} = H | Data ], Acc ) ->
 	{ok, H, Data, Acc};
+get_strings_until(_, _Stack, [], Acc) ->
+	%io:format("Stack:~p~n", [Stack]),
+	{error, not_found, [], Acc };
 
 get_strings_until(Match, Stack, [ { '{', _ } = H | Data ], Acc ) ->
-	get_strings_until(Match, Stack++['}'], Data, Acc++[H]);
+	get_strings_until(Match, ['}']++Stack, Data, Acc++[H]);
 get_strings_until(Match, Stack, [ { '[', _ } = H | Data ], Acc ) ->
-	get_strings_until(Match, Stack++[']'], Data, Acc++[H] );
+	get_strings_until(Match, [']']++Stack, Data, Acc++[H] );
 get_strings_until(Match, [ Item | Stack ], [ { Item, _ } = H | Data ], Acc ) ->
 	get_strings_until(Match, Stack, Data, Acc++[H] );
 
@@ -61,7 +110,6 @@ get_strings_until(Match, Stack, [H | Data], Acc) ->
 % load Strings
 % load PropList
 % Stack = []
-% 
 
 
 % get("riak_api.db_port").
@@ -93,45 +141,86 @@ mod(Loc, Value, Data) ->
 	mod(Loc, Value, Data, [], []).
 
 mod([], [], [], [], Acc) -> Acc;
-mod(Loc, Val, [], Stack, _) -> 
+mod(Loc, Action, [], Stack, _) -> 
 	% got to the end of data without finding the loc,
 	% which should have been verified via proplists,
 	% so this is bad
-	io:format("Error, Data left in: Loc: ~p~n Val: ~p~n Stack: ~p~n ", [Loc, Val, Stack]);
+	io:format("Error, Data left in: Loc: ~p~n Action: ~p~n Stack: ~p~n ", [Loc, Action, Stack]);
 mod([], [], [ H | Data], Stack, Acc ) ->
 	% Loc & Val are empty, so you've found everything.. so just
 	% finish by adding the rest
 	mod([], [], Data, Stack, Acc++[H]);
-mod(Loc, Val, [ {white_space, _, _ } = H | Data ], Stack, Acc) ->
-	mod(Loc, Val, Data, Stack, Acc++[H]);
-mod(Loc, Val, [ { comment, _, _ } = H | Data ], Stack, Acc) ->
-	mod(Loc, Val, Data, Stack, Acc++[H]);
+mod(Loc, Action, [ {white_space, _, _ } = H | Data ], Stack, Acc) ->
+	mod(Loc, Action, Data, Stack, Acc++[H]);
+mod(Loc, Action, [ { comment, _, _ } = H | Data ], Stack, Acc) ->
+	mod(Loc, Action, Data, Stack, Acc++[H]);
 
-mod(Loc, Val, [ { Item, _, _ } = H | Data ], [ Item | Stack ], Acc ) ->
-	mod(Loc, Val, Data, Stack, Acc++[H]);
-mod(Loc, Val, [ { Item, _ } = H | Data ], [ Item | Stack ], Acc ) ->
-	mod(Loc, Val, Data, Stack, Acc++[H]);
+mod(Loc, Action, [ { Item, _, _ } = H | Data ], [ Item | Stack ], Acc ) ->
+	mod(Loc, Action, Data, Stack, Acc++[H]);
+mod(Loc, Action, [ { Item, _ } = H | Data ], [ Item | Stack ], Acc ) ->
+	mod(Loc, Action, Data, Stack, Acc++[H]);
 
-mod([ Item | Loc ], Val, [ { Item, _, _ } = H | Data], [], Acc ) ->
-	mod(Loc, Val, Data, [], Acc++[H]);
-mod([ Item | Loc ], Val, [ { Item, _ } = H | Data], [], Acc ) ->
-	mod(Loc, Val, Data, [], Acc++[H]);
-mod([ Item | Loc ], Val, [ { _, _, Item } = H | Data], [], Acc ) ->
-	mod(Loc, Val, Data, [], Acc++[H]);
+mod([ Item | Loc ], Action, [ { Item, _, _ } = H | Data], [], Acc ) ->
+	mod(Loc, Action, Data, [], Acc++[H]);
+mod([ Item | Loc ], Action, [ { Item, _ } = H | Data], [], Acc ) ->
+	mod(Loc, Action, Data, [], Acc++[H]);
+mod([ Item | Loc ], Action, [ { _, _, Item } = H | Data], [], Acc ) ->
+	mod(Loc, Action, Data, [], Acc++[H]);
 
-mod([], Val, [ _H | Data ], [], Acc ) ->
-	case get_strings_until('}', Data) of
-		{ok, Match, NewData, _ } -> 
-			%io:format("")
-			mod([], [], NewData, [], Acc ++ Val ++ [Match]);
-		Anything ->
-			io:format("~p", [Anything])
+mod([], Action, Data, [], Acc ) ->
+	{ok, EndTuple, DataTuple, TupleContent} = get_strings_until('}', Data),
+	case Action of
+		{change, Value} ->
+			mod([], [], DataTuple, [], Acc ++ Value ++ [EndTuple]);
+		%{add, Name, Value} ->
+
+		{del, [Name]} ->
+			% grab *just* the contents of the next list ( proplist )
+			% send that to get_until_named_tuple, retrieveing the needed tuple contents
+			% don't append tuple contents of tuple which needs to be deleted
+			io:format("TupleContent:~n~p~n", [TupleContent]),
+			dump(TupleContent),
+			case get_strings_until('[', TupleContent, Acc) of
+				{ok, StartList, DataList, AccList } ->
+					{ok, EndList, _DataList2, ListContent } = get_strings_until(']', DataList),
+					{ok, _TupleTokens, ListContentLeft, Acc3 } = get_until_named_tuple(Name, ListContent, AccList++[StartList]),
+					mod([], [], DataTuple, [], Acc3++ListContentLeft++[EndList]);
+				{error, not_found, _, _} ->
+					{error, tuple_not_found, Name, TupleContent}
+			end;
+			%% handle comma
+			%% Return NewData, NewAcc
+		{add, [Name], Value} ->
+			case get_strings_until('[', TupleContent, Acc) of
+				{ok, StartList, DataList, AccList} ->
+					case get_strings_until('{', DataList) of
+						{ok, _, _, _} ->
+							mod([], [], DataTuple, [], AccList++[StartList]++Value++[{',',[{line,0},{text,","}]}]++DataList++[EndTuple]);
+						{error, not_found, _, _} ->
+							mod([], [], DataTuple, [], AccList++[StartList]++Value++DataList++[EndTuple])
+					end;
+				{error, not_found, _, _} ->
+					{error, not_list_of_tuples}
+			end
 	end;
 
-mod(Loc, Val, [ H | Data ], Stack, Acc ) ->
-	mod(Loc, Val, Data, Stack, Acc ++ [H] ).
+mod(Loc, Action, [ H | Data ], Stack, Acc ) ->
+	mod(Loc, Action, Data, Stack, Acc ++ [H] ).
 
+get_until_named_tuple(Name, Data) ->
+	get_until_named_tuple(Name, Data, []).
 
+get_until_named_tuple(Name, [], _) ->
+	{ error, "Unable to find tuple: ~p~n", [Name]};
+get_until_named_tuple(Name, Data, Acc) ->
+	{ok, TupleStart, Data2, Acc2} = get_strings_until('{', Data),
+	{ok, Atom, Data3, Acc3} = get_strings_until(atom, Data2, Acc2++[TupleStart]),
+	{ok, TupleEnd, Data4, Acc4} = get_strings_until('}', Data3, Acc3++[Atom]),
+	case Atom of
+		{ atom, _, Name } -> 
+			{ ok, Acc4++[TupleEnd], Data4, Acc };
+		{ atom, _, _ } -> get_until_named_tuple(Name, Data4, Acc++Acc4++[TupleEnd])
+	end.
 
 get_strings_text({_,[_,{text,Text}],_}) ->
 	Text;
@@ -150,10 +239,15 @@ val_to_strings(Value) ->
 	{ok, Strings, _} = erl_scan:string(Value,1,[return,text]),
 	Strings.
 
-% dump() ->
-% 	Strings = get_strings(appconfig()),
-% 	Output = io_lib:format("~p", [Strings]),
-% 	file:write_file("var/dump.erl", Output).
+text_to_term(Text) ->
+	{ok, Tokens, _} = erl_scan:string(Text, 1, [return, text]),
+	{ok, Term} = erl_parse:parse_term(Tokens++"."),
+	Term.
+
+dump(Strings) ->
+ 	%Strings = get_strings(appconfig()),
+ 	Output = io_lib:format("~p", [Strings]),
+ 	file:write_file("var/dump.erl", Output).
 
 % test() ->
 % 	Strings = get_strings(appconfig()),
