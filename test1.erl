@@ -2,20 +2,30 @@
 
 -compile(export_all).
 
--export([appconfig/0]).
--export([get_strings/1, get_strings_until/2]).
--export([get_strings_until/3, get_strings_until/4, mod/3, mod/5]).
+%% Just setters right now ( hard part? )
+%		- going to use proplist functions for getters/validation/tests
 
-modify_v1(Name, Value) ->
-	Loc = name_to_loc(Name),
-	ExLoc = expand_loc(Loc),
-	%% check to make sure value exists
-	%% load proplist, validate value, etc
-	Strings = get_strings(appconfig()),
-	ValStrings = val_to_strings(Value),
-	NewStrings = mod(ExLoc, ValStrings, Strings),
-	Output = reassemble(NewStrings),
-	file:write_file("var/app.config.new", Output).
+%% expects ./var/app.config to exist ( see appconfig() )
+% 		- lame way of doing it, I figure depending on the level
+%		- of configuration needed, this module might have it's own
+%		- proplist... ( api syntax options, etc )
+
+%% add, change, del commands expect cli-like arguments
+%		"period.seperated.names.of.tuples" for the Name
+%		"{parsable, [{erlang, "Code"}], 45}", or "54", etc for values
+
+% the goal is to have the CLI module figure out what action the user
+% wants to perform based on input, I.E.:
+%   # riak_api.pb_port
+%   >	10017	( return via "get" )
+%   # riak_api.pb_port 10018
+%   >   ok		( change via "change" )
+%	$ riak_core.http 127.0.0.1 10019
+%   >   ok      ( make tuple {"127.0.0.1, 10019"}, add to http)
+%   ( won't work now because "127.0.0.1" isn't an atom, need to add
+%      funcionality to add un-named tuple values
+%			maybe via {add, no-name, [Values]}
+
 
 change(Name, Value) ->
 	change(Name, Value, appconfig()).
@@ -25,6 +35,9 @@ change(Name, Value, File) ->
 	ValStrings = val_to_strings(Value),
 	Action = { change, ValStrings },
 	modify(Target, Action, File).
+
+add(Name) ->
+	add(Name, "[]", appconfig()).
 
 add(Name, Value) ->
 	add(Name, Value, appconfig()).
@@ -47,8 +60,11 @@ del(Name, File) ->
 	Action = { del, Del },
 	modify(Target, Action, File).
 
-comment() -> true.
-uncomment() ->false.
+%comment() -> %%TODO
+%uncomment() -> %%TODO
+% note, automating the commenting and uncommenting of content could
+% cause proplist files to grow unchecked
+% maybe this should only act on specific comments, i.e. %~% or something
 
 modify(Target, Action, File) ->
 	Data = get_strings(File),
@@ -57,17 +73,26 @@ modify(Target, Action, File) ->
 	file:write_file(File++".new", Output).
 
 
+%NOTE, for lack of better terminology:
+%	"strings" are the tuples returned from erl_scan:string(Value,1,[return,text])
 
-% { add, Name, Value }
-% { mod, Value }
-% { del, Name }
+% Getters and validations will be added using proplist functions
+
+
+
+% get_strings_until streams through 'Data' to find the first 'Match'
+% is found in the current... scope?... as it igores matches within balanced
+% brackets {} or [].
+% it returns the 'Match' string, then depleated 'Data', and all
+% the accumulated "strings" between (Acc)
+
+% NOTE: get_strings_until ignores strings in balanced {} or [],
 
 get_strings_until(Match, Data) ->
 	get_strings_until(Match, Data, []).
 
 get_strings_until(Match, Data, Acc) ->
 	get_strings_until(Match, [], Data, Acc).
-
 
 get_strings_until(Match, [], [ {_, _, Match} = H | Data ], Acc ) ->
 	{ok, H, Data, Acc};
@@ -88,29 +113,6 @@ get_strings_until(Match, [ Item | Stack ], [ { Item, _ } = H | Data ], Acc ) ->
 
 get_strings_until(Match, Stack, [H | Data], Acc) ->
 	get_strings_until(Match, Stack, Data, Acc++[H]).
-
-
-%%%NOTES
-% get block in tandem with proplist
-% when atom matches unused proplist branch ->
-%     return text output of block ( first Stack entry until Stack empty )
-% when atom matches used proplist branch from Loc ->
-% enter 'get block in tandem with proplist' to retrieve value/replacement
-
-%%% get_value_with_comments
-
-% add new item:
-%  builds which item the new item should be added to via proplists
-%  once that item is itterated over, acts on closing, appends new item
-% mod item:
-%  validates item via proplists
-%  once item is itterated over, acts on clusing, replacing content
-
-% Loc = [ riak_api, pb_port ]
-% load Strings
-% load PropList
-% Stack = []
-
 
 % get("riak_api.db_port").
 % get(Name) ->
@@ -195,9 +197,9 @@ mod([], Action, Data, [], Acc ) ->
 				{ok, StartList, DataList, AccList} ->
 					case get_strings_until('{', DataList) of
 						{ok, _, _, _} ->
-							mod([], [], DataTuple, [], AccList++[StartList]++Value++[{',',[{line,0},{text,","}]}]++DataList++[EndTuple]);
+							mod([], [], DataTuple, [], AccList++[StartList]++new_tuple_string(Name, Value)++[symbol_string(',')]++DataList++[EndTuple]);
 						{error, not_found, _, _} ->
-							mod([], [], DataTuple, [], AccList++[StartList]++Value++DataList++[EndTuple])
+							mod([], [], DataTuple, [], AccList++[StartList]++new_tuple_string(Name, Value)++DataList++[EndTuple])
 					end;
 				{error, not_found, _, _} ->
 					{error, not_list_of_tuples}
@@ -206,6 +208,20 @@ mod([], Action, Data, [], Acc ) ->
 
 mod(Loc, Action, [ H | Data ], Stack, Acc ) ->
 	mod(Loc, Action, Data, Stack, Acc ++ [H] ).
+
+symbol_string(Symbol) when is_atom(Symbol) ->
+	Text = atom_to_list(Symbol),
+	{Symbol, [{line,0},{text,Text}]}.
+
+atom_string(Atom) when is_atom(Atom) ->
+	Text = atom_to_list(Atom),
+	{atom, [{line,0}, {text, Text}], Atom}.
+
+new_tuple_string(Name, ValueStrings) ->
+	[ symbol_string('{'), atom_string(Name), symbol_string(',') ] ++ ValueStrings ++ [symbol_string('}')].
+
+newline() ->
+	{white_space,[{line,0},{text,"\n"}],"\n"}.
 
 get_until_named_tuple(Name, Data) ->
 	get_until_named_tuple(Name, Data, []).
