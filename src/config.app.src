@@ -1,0 +1,13 @@
+{application, config,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { config_cli, []}},
+  {modules, [ getopt ]},
+  {env, []}
+ ]}.

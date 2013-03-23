@@ -1,2 +1,11 @@
+bin/config
 var/*
+*.komodoproject
+deps
+ebin
+.eunit
+*.o
 *.beam
+*.plt
+*.dump
+*.app

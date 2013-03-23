@@ -1,4 +1,4 @@
--module(test1).
+-module(proplists_mod).
 
 -compile(export_all).
 
