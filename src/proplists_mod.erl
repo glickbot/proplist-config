@@ -27,38 +27,38 @@
 %			maybe via {add, no-name, [Values]}
 
 
-change(Name, Value) ->
-	change(Name, Value, appconfig()).
+% change(Name, Value) ->
+% 	change(Name, Value, appconfig()).
 
-change(Name, Value, File) ->
-	Target = expand_loc(name_to_loc(Name)),
-	ValStrings = val_to_strings(Value),
-	Action = { change, ValStrings },
-	modify(Target, Action, File).
+% change(Name, Value, File) ->
+% 	Target = expand_loc(name_to_loc(Name)),
+% 	ValStrings = val_to_strings(Value),
+% 	Action = { change, ValStrings },
+% 	modify(Target, Action, File).
 
-add(Name) ->
-	add(Name, "[]", appconfig()).
+% add(Name) ->
+% 	add(Name, "[]", appconfig()).
 
-add(Name, Value) ->
-	add(Name, Value, appconfig()).
+% add(Name, Value) ->
+% 	add(Name, Value, appconfig()).
 
-add(Name, Value, File) ->
-	Loc = name_to_loc(Name),
-	{ NewLoc, New } = lists:split(length(Loc) - 1, Loc),
-	Target = expand_loc(NewLoc),
-	ValStrings = val_to_strings(Value),
-	Action = { add, New, ValStrings },
-	modify(Target, Action, File).
+% add(Name, Value, File) ->
+% 	Loc = name_to_loc(Name),
+% 	{ NewLoc, New } = lists:split(length(Loc) - 1, Loc),
+% 	Target = expand_loc(NewLoc),
+% 	ValStrings = val_to_strings(Value),
+% 	Action = { add, New, ValStrings },
+% 	modify(Target, Action, File).
 
-del(Name) ->
-	del(Name, appconfig()).
+% del(Name) ->
+% 	del(Name, appconfig()).
 
-del(Name, File) ->
-	Loc = name_to_loc(Name),
-	{ NewLoc, Del } = lists:split(length(Loc) - 1, Loc),
-	Target = expand_loc(NewLoc),
-	Action = { del, Del },
-	modify(Target, Action, File).
+% del(Name, File) ->
+% 	Loc = name_to_loc(Name),
+% 	{ NewLoc, Del } = lists:split(length(Loc) - 1, Loc),
+% 	Target = expand_loc(NewLoc),
+% 	Action = { del, Del },
+% 	modify(Target, Action, File).
 
 %comment() -> %%TODO
 %uncomment() -> %%TODO
@@ -66,12 +66,19 @@ del(Name, File) ->
 % cause proplist files to grow unchecked
 % maybe this should only act on specific comments, i.e. %~% or something
 
-modify(Target, Action, File) ->
+% modify(Target, Action, File) ->
+% 	Data = get_strings(File),
+% 	NewData = mod(Target, Action, Data),
+% 	Output = reassemble(NewData),
+% 	file:write_file(File++".new", Output).
+
+modify(Loc, Action, File) ->
 	Data = get_strings(File),
+	Target = expand_loc(Loc),
 	NewData = mod(Target, Action, Data),
 	Output = reassemble(NewData),
-	file:write_file(File++".new", Output).
-
+	{ ok, Output }.
+	%%file:write_file(File++".new", Output).
 
 %NOTE, for lack of better terminology:
 %	"strings" are the tuples returned from erl_scan:string(Value,1,[return,text])
@@ -121,9 +128,9 @@ get_strings_until(Match, Stack, [H | Data], Acc) ->
 % 	{ok, [Prop]} = file:consult(appconfig()),
 % 	get_proplist_loc_value(Loc, Prop).
 
-name_to_loc(Name) ->
-	List = string:tokens(Name, "."),
-	[list_to_atom(X) || X <- List].
+% name_to_loc(Name) ->
+% 	List = string:tokens(Name, "."),
+% 	[list_to_atom(X) || X <- List].
 
 expand_loc(Loc) ->
 	expand_loc(Loc, []).
@@ -243,7 +250,7 @@ get_strings_text({_,[_,{text,Text}],_}) ->
 get_strings_text({_,[_,{text,Text}]}) ->
 	Text.
 
-appconfig() -> "var/app.config".
+% appconfig() -> "var/app.config".
 
 get_strings(File) ->
 	{ok, Bin} = file:read_file(File),
@@ -251,9 +258,9 @@ get_strings(File) ->
 	{ok, Strings, _} = erl_scan:string(Content,1,[return,text]),
 	Strings.
 
-val_to_strings(Value) ->
-	{ok, Strings, _} = erl_scan:string(Value,1,[return,text]),
-	Strings.
+% val_to_strings(Value) ->
+% 	{ok, Strings, _} = erl_scan:string(Value,1,[return,text]),
+% 	Strings.
 
 text_to_term(Text) ->
 	{ok, Tokens, _} = erl_scan:string(Text, 1, [return, text]),
