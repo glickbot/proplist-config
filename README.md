@@ -10,16 +10,16 @@ These configuration files are hard to automate without converting to/from a diff
 ### Purpose
 
 This editor sets out to:
-*) Provide a command-line api to non-destructively read/modify proplist based configuration files
-*) Provide a method to pre-define available configuration parameters/usage info to validate config files
+* Provide a command-line api to non-destructively read/modify proplist based configuration files
+* Provide a method to pre-define available configuration parameters/usage info to validate config files
 
 ### Current status
-*) Pre-alpha - 'set', 'del', 'add' commands "work", but their implementation may change
+* Pre-alpha - 'set', 'del', 'add' commands "work", but their implementation may change
 
 ### TODO
-*) validations via 'proplists' before sending to proplists_mod
-*) read/get commands
-*) proper error handling
-*) help functions
-*) tests
-*) config definition/usage framework
+* validations via 'proplists' before sending to proplists_mod
+* read/get commands
+* proper error handling
+* help functions
+* tests
+* config definition/usage framework
