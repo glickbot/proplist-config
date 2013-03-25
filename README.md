@@ -16,13 +16,17 @@ This editor sets out to:
 ### API
 
 Set pb_port to 5 in Riak's app.config:
-	config set riak_api.pb_port 5
-
+``` bash
+$ config set riak_api.pb_port 5
+```
 Delete the pb_port tuple in Riak's app.config:
-	config del riak_api.pb_port
-
+``` bash
+$ config del riak_api.pb_port
+```
 Add pb_port back to Riak's app.config:
-	config add riak_api.pb_port 5
+``` bash
+$ config add riak_api.pb_port 5
+```
 
 #### Current status
 * Pre-alpha - 'set', 'del', 'add' commands "work", but their implementation may change
