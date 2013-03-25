@@ -34,12 +34,18 @@ Add pb_port back to Riak's app.config:
 
 ### Installation:
 Get the code:
-	git clone git://github.com/glickbot/proplist-config.git
+``` bash
+$ git clone git://github.com/glickbot/proplist-config.git
+```
 Make the code:
-	cd proplist-config
-	make
+``` bash
+cd proplist-config
+make
+```
 Use the code:
-	bin/config set riak_api.pb_port 42 -f /etc/riak/app.config
+``` bash
+bin/config set riak_api.pb_port 42 -f /etc/riak/app.config
+```
 
 ### TODO
 * validations via 'proplists' before sending to proplists_mod
